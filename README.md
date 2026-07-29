@@ -130,11 +130,14 @@ and the booking parser.
 
 ## Design
 
-Type and surface language follow [snob.chester.how](https://snob.chester.how):
-Fraunces on warm paper (`#f8f4f1`), hard black rules, 8px radii, light weights,
-tight heading tracking. Colour is circadian — amber day through indigo night —
-and the activity palette is derived from it, so the timeline reads as a day
-passing rather than as arbitrary category colours.
+Palette comes from the app icon: slate-green surfaces, pale sage text and
+accents, near-black ground. Structure and type follow
+[snob.chester.how](https://snob.chester.how) — Fraunces, hard rules, 8px radii,
+tight display tracking.
+
+Readability rules the stylesheet holds to: nothing below 11px, body copy at
+weight 400 (never 300), weight 300 only above 1rem where the stroke is thick
+enough to survive, and every text colour clearing 7:1 on its own background.
 
 Fraunces is bundled as a variable `.woff2` rather than pulled from Google Fonts.
 An MV3 extension page should not depend on a remote font, and bundling means the
