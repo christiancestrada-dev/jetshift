@@ -24,6 +24,9 @@ let goalWakeTouched = false;
 
 const $ = (id) => document.getElementById(id);
 
+/** Mirrors NON_BLOCKING in schedule.js — these never claim a full track row. */
+const PASSIVE_TYPES = new Set(['melatonin', 'caffeine_cutoff', 'eating']);
+
 // ── Init ─────────────────────────────────────────────────
 
 async function init() {
@@ -61,7 +64,7 @@ function renderTrips() {
   if (trips.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'empty';
-    empty.textContent = 'No trips yet. Add a flight and JetShift will work out when to chase light and when to hide from it.';
+    empty.textContent = 'No trips yet. Add a flight and Clairo will work out when to chase light and when to hide from it.';
     list.appendChild(empty);
     return;
   }
@@ -425,7 +428,10 @@ function renderTimeline(entries, trip) {
     for (const band of bands) {
       const meta = activityMeta(band.type);
       const block = document.createElement('div');
-      block.className = `tl-block${band.inFlight ? ' in-flight' : ''}`;
+      // Background and point-in-time activities ride a strip along the bottom
+      // so an 11-hour eating window cannot swamp the blocks that matter.
+      const passive = PASSIVE_TYPES.has(band.type);
+      block.className = `tl-block${passive ? ' passive' : ''}${band.inFlight ? ' in-flight' : ''}`;
       block.style.left = `${(band.from / 24) * 100}%`;
       block.style.width = `${Math.max(((band.to - band.from) / 24) * 100, 0.8)}%`;
       block.style.background = `var(${meta.css})`;

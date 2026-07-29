@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { renderPRC } from '../lib/prc-chart.js';
+import { renderPRC, PALETTE } from '../lib/prc-chart.js';
 import { lightWindow, avoidWindow, sleepWindow } from '../lib/circadian.js';
 
 /**
@@ -90,7 +90,7 @@ test('a window crossing midnight is drawn as two pieces', () => {
   // Advancing with CBTmin at 4am puts the avoid window at 10pm to midnight.
   const svg = render(4, 'advance');
   const rects = svg.children.filter((c) => c.tag === 'rect');
-  const delayBand = rects.filter((r) => r.attrs.fill === '#e84060');
+  const delayBand = rects.filter((r) => r.attrs.fill === PALETTE.delay);
   assert.equal(delayBand.length, 2, 'the delay band spans midnight and should split');
   const total = delayBand.reduce((s, r) => s + Number(r.attrs.width), 0);
   assert.ok(Math.abs(total - (6 / 24) * W) < 1e-6, 'split pieces should still total 6 hours');
@@ -98,7 +98,7 @@ test('a window crossing midnight is drawn as two pieces', () => {
 
 test('CBTmin is marked at the right position', () => {
   const svg = render(9, 'advance');
-  const line = svg.children.find((c) => c.tag === 'line' && c.attrs.stroke === '#f0c040');
+  const line = svg.children.find((c) => c.tag === 'line' && c.attrs.stroke === PALETTE.cbtMin);
   assert.ok(line, 'CBTmin line missing');
   assert.ok(Math.abs(Number(line.attrs.x1) - (9 / 24) * W) < 1e-6);
 });

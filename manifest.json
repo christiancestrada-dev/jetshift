@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "JetShift",
-  "version": "2.0.0",
+  "name": "Clairo",
+  "version": "2.1.0",
   "description": "Plan a circadian phase shift around your flight and sync the light, sleep and melatonin schedule to Google Calendar.",
   "permissions": [
     "identity",

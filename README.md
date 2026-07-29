@@ -1,4 +1,4 @@
-# JetShift
+# Clairo
 
 A Chrome extension that plans a circadian phase shift around your flight and
 writes it to Google Calendar as timed light, sleep, melatonin and meal blocks.
@@ -87,6 +87,8 @@ Needs a Google Cloud OAuth client before it can write to your calendar.
 
 ```
 manifest.json              MV3 config, OAuth scopes
+assets/
+  Fraunces.woff2           bundled variable font, latin subset
 popup/
   popup.html  .css  .js    UI — views, charts, wiring
 lib/
@@ -125,6 +127,18 @@ the spring-forward gap, timezone-correct day anchoring for eastward departures,
 and the booking parser.
 
 ---
+
+## Design
+
+Type and surface language follow [snob.chester.how](https://snob.chester.how):
+Fraunces on warm paper (`#f8f4f1`), hard black rules, 8px radii, light weights,
+tight heading tracking. Colour is circadian — amber day through indigo night —
+and the activity palette is derived from it, so the timeline reads as a day
+passing rather than as arbitrary category colours.
+
+Fraunces is bundled as a variable `.woff2` rather than pulled from Google Fonts.
+An MV3 extension page should not depend on a remote font, and bundling means the
+popup renders correctly offline and on first paint.
 
 ## Tuning
 

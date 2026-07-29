@@ -1,4 +1,4 @@
-# The JetShift circadian model
+# The Clairo circadian model
 
 What the extension actually computes, why each constant is what it is, and
 where the model stops being trustworthy.
