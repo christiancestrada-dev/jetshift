@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="popup.css">
+  <title>JetShift</title>
+</head>
+<body>
+<div id="view-container">
+
+  <!-- ── Trips ─────────────────────────────────────────────── -->
+  <section id="trips-view" class="view view-active">
+    <header class="masthead">
+      <div class="wordmark">JETSHIFT</div>
+      <p class="tagline">Move your circadian clock on purpose, not by accident.</p>
+    </header>
+
+    <button id="add-trip-btn" class="btn btn-primary">New trip</button>
+
+    <div class="section-label">Your trips</div>
+    <div id="trips-list" class="trips-list"></div>
+  </section>
+
+  <!-- ── New trip form ─────────────────────────────────────── -->
+  <section id="form-view" class="view">
+    <header class="bar">
+      <button class="icon-btn" id="form-back" aria-label="Back">←</button>
+      <h2>New trip</h2>
+    </header>
+
+    <form id="flight-form" class="scroll">
+
+      <details class="import">
+        <summary>Paste a booking to autofill</summary>
+        <textarea id="import-text" rows="4"
+          placeholder="BA215  BOS → LHR&#10;Departs  15 May  18:30&#10;Arrives  16 May  06:45"></textarea>
+        <button type="button" id="import-parse-btn" class="btn btn-ghost btn-sm">Parse</button>
+        <div id="import-error" class="msg msg-error" hidden></div>
+        <div id="import-ok" class="msg msg-ok" hidden></div>
+      </details>
+
+      <div class="grid-2">
+        <label class="field">
+          <span class="field-label">From</span>
+          <input type="text" id="dep-airport" list="airport-list" placeholder="BOS"
+                 autocomplete="off" spellcheck="false" required>
+        </label>
+        <label class="field">
+          <span class="field-label">To</span>
+          <input type="text" id="arr-airport" list="airport-list" placeholder="LHR"
+                 autocomplete="off" spellcheck="false" required>
+        </label>
+      </div>
+      <datalist id="airport-list"></datalist>
+      <div id="route-note" class="route-note" hidden></div>
+
+      <label class="field">
+        <span class="field-label">Takeoff <em>local time at origin</em></span>
+        <input type="datetime-local" id="dep-datetime" required>
+      </label>
+      <label class="field">
+        <span class="field-label">Landing <em>local time at destination</em></span>
+        <input type="datetime-local" id="arr-datetime" required>
+      </label>
+
+      <div class="grid-2">
+        <label class="field">
+          <span class="field-label">Wake now <em>at home</em></span>
+          <input type="time" id="current-wake-input" value="07:00" required>
+        </label>
+        <label class="field">
+          <span class="field-label">Wake there <em>goal</em></span>
+          <input type="time" id="goal-wake-input" value="07:00" required>
+        </label>
+      </div>
+
+      <!-- Phase Blink -->
+      <div id="phase-blink" class="blink" hidden>
+        <div class="blink-head">
+          <span class="blink-title">Phase Blink</span>
+          <span id="pb-direction" class="pill">—</span>
+        </div>
+
+        <svg id="pb-chart" class="prc-chart" viewBox="0 0 320 120"
+             preserveAspectRatio="none" role="img"
+             aria-label="Phase response curve for today's body clock"></svg>
+        <div class="chart-axis">
+          <span>12am</span><span>6am</span><span>12pm</span><span>6pm</span><span>12am</span>
+        </div>
+
+        <div class="blink-stats">
+          <div class="stat"><span class="stat-key">CBTmin</span><span id="pb-cbtmin" class="stat-val">—</span></div>
+          <div class="stat"><span class="stat-key">Shift</span><span id="pb-shift" class="stat-val">—</span></div>
+          <div class="stat"><span class="stat-key">Adapts in</span><span id="pb-days" class="stat-val">—</span></div>
+        </div>
+
+        <div class="zone-rows">
+          <div class="zone zone-seek">
+            <span class="zone-dot"></span>
+            <span class="zone-name">Seek light</span>
+            <span id="pb-seek" class="zone-time">—</span>
+          </div>
+          <div class="zone zone-avoid">
+            <span class="zone-dot"></span>
+            <span class="zone-name">Avoid light</span>
+            <span id="pb-avoid" class="zone-time">—</span>
+          </div>
+        </div>
+
+        <p id="pb-note" class="blink-note"></p>
+      </div>
+
+      <div class="field">
+        <span class="field-label">Approach</span>
+        <div class="segmented" role="radiogroup">
+          <label class="seg">
+            <input type="radio" name="schedule-mode" value="prepare" checked>
+            <span><strong>Prepare</strong><em>Start shifting before you fly</em></span>
+          </label>
+          <label class="seg">
+            <input type="radio" name="schedule-mode" value="respond">
+            <span><strong>Respond</strong><em>Only adjust after landing</em></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="field" id="days-prep-group">
+        <span class="field-label">
+          Begin <b id="days-prep-display">3</b> days before landing
+        </span>
+        <input type="range" id="days-prep-input" min="0" max="7" value="3" step="1">
+        <div class="range-ends"><span>Landing day</span><span>A week out</span></div>
+      </div>
+
+      <div id="form-error" class="msg msg-error" hidden></div>
+      <button type="submit" class="btn btn-primary">Build plan</button>
+    </form>
+  </section>
+
+  <!-- ── Trip detail ───────────────────────────────────────── -->
+  <section id="detail-view" class="view">
+    <header class="bar">
+      <button class="icon-btn" id="detail-back" aria-label="Back">←</button>
+      <div class="bar-title">
+        <h2 id="detail-title"></h2>
+        <div id="detail-meta" class="bar-sub"></div>
+      </div>
+      <button class="icon-btn" id="trip-settings-btn" aria-label="Trip settings">⚙</button>
+    </header>
+
+    <nav class="tabs" role="tablist">
+      <button class="tab active" data-tab="timeline" role="tab">Timeline</button>
+      <button class="tab" data-tab="day" role="tab">Day</button>
+      <button class="tab" data-tab="clock" role="tab">Clock</button>
+    </nav>
+
+    <div class="scroll">
+      <!-- Timeline -->
+      <div class="panel active" id="panel-timeline">
+        <div id="legend" class="legend"></div>
+        <div class="chart-axis chart-axis-inset">
+          <span>12am</span><span>6am</span><span>12pm</span><span>6pm</span><span>12am</span>
+        </div>
+        <div id="timeline-rows"></div>
+      </div>
+
+      <!-- Day -->
+      <div class="panel" id="panel-day">
+        <div class="day-bar">
+          <button class="icon-btn" id="day-prev" aria-label="Previous day">‹</button>
+          <div class="day-head">
+            <span class="day-title" id="day-title"></span>
+            <span class="day-sub" id="day-sub"></span>
+          </div>
+          <button class="icon-btn" id="day-next" aria-label="Next day">›</button>
+        </div>
+        <div class="tz-toggle" id="tz-toggle">
+          <button class="active" data-tz="local"></button>
+          <button data-tz="other"></button>
+        </div>
+        <div id="day-activities"></div>
+      </div>
+
+      <!-- Clock -->
+      <div class="panel" id="panel-clock">
+        <div class="blink" id="clock-blink">
+          <div class="blink-head">
+            <span class="blink-title">Phase response curve</span>
+            <span id="ck-direction" class="pill">—</span>
+          </div>
+          <svg id="ck-chart" class="prc-chart" viewBox="0 0 320 120"
+               preserveAspectRatio="none" role="img"
+               aria-label="Phase response curve at the destination"></svg>
+          <div class="chart-axis">
+            <span>12am</span><span>6am</span><span>12pm</span><span>6pm</span><span>12am</span>
+          </div>
+          <div class="blink-stats">
+            <div class="stat"><span class="stat-key">CBTmin home</span><span id="ck-cbt-home" class="stat-val">—</span></div>
+            <div class="stat"><span class="stat-key">CBTmin goal</span><span id="ck-cbt-goal" class="stat-val">—</span></div>
+            <div class="stat"><span class="stat-key">Total shift</span><span id="ck-shift" class="stat-val">—</span></div>
+          </div>
+          <p id="ck-note" class="blink-note"></p>
+        </div>
+
+        <div class="section-label">Rhythm strength</div>
+        <div class="amp-card">
+          <p class="amp-blurb">
+            Amplitude is how deep the trough and how high the peak — separate from where
+            the rhythm sits. Shifting fast flattens it; daylight across your subjective
+            day builds it back without moving your phase.
+          </p>
+          <div id="amp-strip" class="amp-strip"></div>
+          <div class="amp-scale"><span>Flat</span><span>Robust</span></div>
+        </div>
+
+        <div class="section-label">Sleep, night by night</div>
+        <div class="wake-row">
+          <div class="wake-cell">
+            <span class="wake-key">Home wake</span>
+            <span id="display-current-wake" class="wake-val">—</span>
+          </div>
+          <span class="wake-arrow">→</span>
+          <div class="wake-cell">
+            <span class="wake-key">Goal wake</span>
+            <span id="display-goal-wake" class="wake-val">—</span>
+          </div>
+        </div>
+        <div class="chart-axis chart-axis-inset">
+          <span>12am</span><span>6am</span><span>12pm</span><span>6pm</span><span>12am</span>
+        </div>
+        <div id="sleep-bars"></div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <button id="sync-btn" class="btn btn-primary">Sync to Google Calendar</button>
+    </div>
+  </section>
+
+  <!-- ── Settings ──────────────────────────────────────────── -->
+  <section id="settings-view" class="view">
+    <header class="bar">
+      <button class="icon-btn" id="settings-back" aria-label="Back">←</button>
+      <h2>Trip settings</h2>
+    </header>
+
+    <div class="scroll">
+      <div class="section-label">Flight</div>
+      <div class="grid-2">
+        <label class="field">
+          <span class="field-label">From</span>
+          <input type="text" id="edit-dep-airport" list="airport-list" autocomplete="off" required>
+        </label>
+        <label class="field">
+          <span class="field-label">To</span>
+          <input type="text" id="edit-arr-airport" list="airport-list" autocomplete="off" required>
+        </label>
+      </div>
+      <label class="field">
+        <span class="field-label">Takeoff</span>
+        <input type="datetime-local" id="edit-dep-datetime" required>
+      </label>
+      <label class="field">
+        <span class="field-label">Landing</span>
+        <input type="datetime-local" id="edit-arr-datetime" required>
+      </label>
+
+      <div class="section-label">Sleep</div>
+      <div class="grid-2">
+        <label class="field">
+          <span class="field-label">Wake now</span>
+          <input type="time" id="edit-current-wake" required>
+        </label>
+        <label class="field">
+          <span class="field-label">Wake there</span>
+          <input type="time" id="edit-goal-wake" required>
+        </label>
+      </div>
+
+      <div class="field">
+        <span class="field-label">Approach</span>
+        <div class="segmented" role="radiogroup">
+          <label class="seg">
+            <input type="radio" name="edit-schedule-mode" value="prepare" checked>
+            <span><strong>Prepare</strong></span>
+          </label>
+          <label class="seg">
+            <input type="radio" name="edit-schedule-mode" value="respond">
+            <span><strong>Respond</strong></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="field" id="edit-days-prep-group">
+        <span class="field-label">Begin <b id="edit-days-prep-display">3</b> days before landing</span>
+        <input type="range" id="edit-days-prep" min="0" max="7" value="3" step="1">
+        <div class="range-ends"><span>Landing day</span><span>A week out</span></div>
+      </div>
+
+      <div id="settings-error" class="msg msg-error" hidden></div>
+      <button id="update-trip-btn" class="btn btn-primary">Rebuild plan</button>
+
+      <div class="section-label">Calendar</div>
+      <button id="delete-calendar-btn" class="btn btn-ghost">Remove synced events</button>
+
+      <div class="section-label danger">Danger zone</div>
+      <button id="delete-trip-btn" class="btn btn-danger">Delete this trip</button>
+      <div id="settings-note" class="msg msg-ok" hidden></div>
+    </div>
+  </section>
+
+  <!-- ── Sync ──────────────────────────────────────────────── -->
+  <section id="sync-view" class="view">
+    <div class="sync-wrap">
+      <div id="sync-progress">
+        <div class="pulse"></div>
+        <p class="sync-title">Writing to your calendar</p>
+        <div class="progress"><div id="progress-fill" class="progress-fill"></div></div>
+        <p class="sync-count" id="sync-count"></p>
+      </div>
+
+      <div id="sync-done" hidden>
+        <div class="tick">✓</div>
+        <p class="sync-title" id="sync-result"></p>
+        <button id="open-calendar-btn" class="btn btn-primary">Open Google Calendar</button>
+        <button id="done-btn" class="btn btn-ghost">Back to trip</button>
+      </div>
+
+      <div id="sync-error-view" hidden>
+        <div class="cross">!</div>
+        <p class="sync-title">Sync failed</p>
+        <p id="sync-error-msg" class="msg msg-error"></p>
+        <button id="retry-btn" class="btn btn-primary">Try again</button>
+        <button id="back-to-trip-btn" class="btn btn-ghost">Back to trip</button>
+      </div>
+    </div>
+  </section>
+
+</div>
+<script type="module" src="popup.js"></script>
+</body>
+</html>
