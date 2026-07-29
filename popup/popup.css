@@ -33,6 +33,10 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* Must outrank the `display: flex` on .blink, .field, .tz-toggle and the sync
+   panels — without this the `hidden` attribute does nothing to any of them. */
+[hidden] { display: none !important; }
+
 body {
   width: 400px;
   height: 600px;

@@ -23,32 +23,28 @@ async function handleSync(events) {
     chrome.runtime.sendMessage({ action: 'syncProgress', current, total }).catch(() => {});
   };
 
-  try {
-    const result = await batchCreateEvents(token, events, onProgress);
+  // Token refresh is handled inside the batch so a mid-run expiry resumes at
+  // the event that failed. Restarting the batch here would duplicate every
+  // event already written.
+  const result = await batchCreateEvents(token, events, onProgress, () => getAuthToken(true));
 
-    await chrome.storage.local.set({
-      lastSync: {
-        timestamp: Date.now(),
-        created: result.created,
-        failed: result.failed.length,
-        total: events.length,
-      },
-    });
-
-    return {
-      success: true,
+  await chrome.storage.local.set({
+    lastSync: {
+      timestamp: Date.now(),
       created: result.created,
-      eventIds: result.eventIds,
-      warning: result.failed.length > 0 ? `${result.failed.length} event(s) failed` : undefined,
-    };
-  } catch (err) {
-    if (err.message === 'AUTH_EXPIRED') {
-      const freshToken = await getAuthToken(true);
-      const result = await batchCreateEvents(freshToken, events, onProgress);
-      return { success: true, created: result.created, eventIds: result.eventIds };
-    }
-    throw err;
-  }
+      failed: result.failed.length,
+      total: events.length,
+    },
+  });
+
+  return {
+    success: true,
+    created: result.created,
+    eventIds: result.eventIds,
+    warning: result.failed.length > 0
+      ? `${result.failed.length} event${result.failed.length === 1 ? '' : 's'} failed`
+      : undefined,
+  };
 }
 
 async function handleDelete(eventIds) {

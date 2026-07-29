@@ -484,11 +484,17 @@ function renderDayPlan(entries, trip) {
 
   const depCode = trip.departureAirport;
   const arrCode = trip.arrivalAirport;
+  const depZone = airports[depCode]?.timezone || 'UTC';
+  const arrZone = airports[arrCode]?.timezone || 'UTC';
   const [a, b] = document.querySelectorAll('#tz-toggle button');
   a.textContent = depCode;
   b.textContent = arrCode;
-  a.dataset.zone = airports[depCode]?.timezone || 'UTC';
-  b.dataset.zone = airports[arrCode]?.timezone || 'UTC';
+  a.dataset.zone = depZone;
+  b.dataset.zone = arrZone;
+
+  // Nothing to switch between on a same-timezone route, and leaving it visible
+  // would light up both buttons at once.
+  $('tz-toggle').hidden = depZone === arrZone;
 
   renderDayPage();
 }
