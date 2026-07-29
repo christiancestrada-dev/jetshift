@@ -31,7 +31,7 @@ import {
   INTENSITY,
 } from '../lib/circadian.js';
 
-import { generateSchedule } from '../lib/schedule.js';
+import { generateSchedule, resolveFlight } from '../lib/schedule.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const airports = JSON.parse(readFileSync(join(here, '../data/airports.json'), 'utf8'));
@@ -491,6 +491,28 @@ test('sleep blocks are always 8h before trimming and never zero after', () => {
   }
 });
 
+test('every declared activity type actually reaches the schedule', () => {
+  // A prescription that is always trimmed away by a higher-priority block is a
+  // bug, not a preference. dim_light used to be swallowed whole.
+  const r = generateSchedule(BOS_LHR, { currentWakeTime: '08:00', goalWakeTime: '08:00', daysPrep: 3, mode: 'prepare' }, airports);
+  const present = new Set(r.entries.map((e) => e.activity_type));
+  for (const type of ['sleep', 'bright_light', 'light_avoidance', 'dim_light', 'amplitude_boost', 'melatonin', 'caffeine_cutoff', 'eating']) {
+    assert.ok(present.has(type), `${type} never survives into the schedule`);
+  }
+});
+
+test('a westward trip also emits every relevant type', () => {
+  const r = generateSchedule(
+    { departureAirport: 'BOS', arrivalAirport: 'LAX', departureDatetime: '2026-05-15T09:00', arrivalDatetime: '2026-05-15T12:30' },
+    { currentWakeTime: '08:00', goalWakeTime: '08:00', daysPrep: 3, mode: 'prepare' },
+    airports
+  );
+  const present = new Set(r.entries.map((e) => e.activity_type));
+  for (const type of ['sleep', 'bright_light', 'light_avoidance', 'amplitude_boost', 'melatonin']) {
+    assert.ok(present.has(type), `${type} missing from a delay schedule`);
+  }
+});
+
 test('bright light is never scheduled during sleep', () => {
   const r = generateSchedule(BOS_LHR, { currentWakeTime: '08:00', goalWakeTime: '08:00', daysPrep: 3, mode: 'prepare' }, airports);
   const sleeps = r.entries.filter((e) => e.activity_type === 'sleep');
@@ -505,12 +527,53 @@ test('bright light is never scheduled during sleep', () => {
 
 test('entries during the flight are flagged', () => {
   const r = generateSchedule(BOS_LHR, { currentWakeTime: '08:00', goalWakeTime: '08:00', daysPrep: 3, mode: 'prepare' }, airports);
-  const dep = new Date(BOS_LHR.departureDatetime).getTime();
-  const arr = new Date(BOS_LHR.arrivalDatetime).getTime();
+  const dep = new Date(r.flight.departureInstant).getTime();
+  const arr = new Date(r.flight.arrivalInstant).getTime();
   for (const e of r.entries) {
     const overlaps = e.start.getTime() < arr && e.end.getTime() > dep;
     assert.equal(e.inFlight, overlaps, `${e.activity_type} inFlight flag is wrong`);
   }
+  assert.ok(r.entries.some((e) => e.inFlight), 'an overnight flight should overlap something');
+});
+
+test('flight times resolve in the airports\' own zones', () => {
+  // Takeoff is Boston wall-clock, landing is London wall-clock. Neither should
+  // depend on the timezone of the machine building the schedule.
+  const { depInstant, arrInstant } = resolveFlight(BOS_LHR, airports);
+  assert.equal(depInstant.toISOString(), '2026-05-15T22:30:00.000Z'); // 18:30 EDT
+  assert.equal(arrInstant.toISOString(), '2026-05-16T05:45:00.000Z'); // 06:45 BST
+  const hours = (arrInstant - depInstant) / 3600000;
+  assert.ok(Math.abs(hours - 7.25) < 1e-9, `expected a 7h15m flight, got ${hours}`);
+});
+
+test('a flight landing at an earlier clock time is still valid', () => {
+  // Tokyo to Los Angeles crosses the dateline and lands "before" it left.
+  const { depInstant, arrInstant } = resolveFlight(
+    { departureAirport: 'NRT', arrivalAirport: 'LAX', departureDatetime: '2026-05-15T17:00', arrivalDatetime: '2026-05-15T10:30' },
+    airports
+  );
+  assert.equal(depInstant.toISOString(), '2026-05-15T08:00:00.000Z'); // 17:00 JST
+  assert.equal(arrInstant.toISOString(), '2026-05-15T17:30:00.000Z'); // 10:30 PDT
+  assert.ok(arrInstant > depInstant, 'arrival is genuinely after departure');
+  assert.ok(Math.abs((arrInstant - depInstant) / 3600000 - 9.5) < 1e-9);
+});
+
+test('a landing late in the destination day stays on that day', () => {
+  // The old machine-local parse pushed this to the following date for anyone
+  // planning from a timezone behind the destination.
+  const r = generateSchedule(
+    { departureAirport: 'BOS', arrivalAirport: 'LHR', departureDatetime: '2026-05-15T14:00', arrivalDatetime: '2026-05-15T23:30' },
+    { currentWakeTime: '08:00', goalWakeTime: '08:00', daysPrep: 2, mode: 'prepare' },
+    airports
+  );
+  const landing = r.entries.filter((e) => e.dayOffset === 0);
+  assert.deepEqual([...new Set(landing.map((e) => e.dateKey))], ['2026-05-15']);
+});
+
+test('a malformed flight time is rejected', () => {
+  assert.throws(() => resolveFlight({ ...BOS_LHR, departureDatetime: 'nonsense' }, airports), /Invalid takeoff/);
+  assert.throws(() => resolveFlight({ ...BOS_LHR, arrivalDatetime: '' }, airports), /Invalid landing/);
+  assert.throws(() => resolveFlight({ ...BOS_LHR, arrivalDatetime: '2026-13-45T06:45' }, airports), /Invalid landing/);
 });
 
 test('an unknown airport is rejected', () => {

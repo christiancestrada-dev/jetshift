@@ -1,4 +1,4 @@
-import { generateSchedule, buildFlightEvent } from '../lib/schedule.js';
+import { generateSchedule, buildFlightEvent, resolveFlight } from '../lib/schedule.js';
 import {
   requiredShift, buildShiftPlan, lightWindow, avoidWindow, sleepWindow,
   CBTMIN_BEFORE_WAKE,
@@ -249,7 +249,27 @@ function validate(f) {
   if (!airports[f.arrAirport]) return `Unknown airport: ${f.arrAirport || '—'}`;
   if (f.depAirport === f.arrAirport) return 'Origin and destination must differ.';
   if (!f.depDatetime || !f.arrDatetime) return 'Both flight times are required.';
-  if (new Date(f.arrDatetime) <= new Date(f.depDatetime)) return 'Landing must be after takeoff.';
+
+  // Compare real instants, not the clock strings. Tokyo to Los Angeles lands at
+  // an earlier local time than it departs and is perfectly valid.
+  let flight;
+  try {
+    flight = resolveFlight(
+      {
+        departureAirport: f.depAirport,
+        arrivalAirport: f.arrAirport,
+        departureDatetime: f.depDatetime,
+        arrivalDatetime: f.arrDatetime,
+      },
+      airports
+    );
+  } catch (ex) {
+    return ex.message;
+  }
+
+  const hours = (flight.arrInstant - flight.depInstant) / 3600000;
+  if (hours <= 0) return 'Landing must be after takeoff.';
+  if (hours > 26) return 'That is over 26 hours in the air — check the dates.';
   return null;
 }
 
@@ -282,6 +302,7 @@ function buildTrip(f) {
     entries: result.entries.map(serialize),
     summary: result.summary,
     model: result.model,
+    flight: result.flight,
     syncedEventIds: [],
     flightEventId: null,
   };
@@ -374,10 +395,13 @@ function renderTimeline(entries, trip) {
 
   const byDate = bandsByDate(entries);
   const cbtByOffset = new Map((trip.model?.days || []).map((d) => [d.dayOffset, d.cbtMinH]));
-  const depTz = airports[trip.departureAirport]?.timezone;
-  const arrTz = airports[trip.arrivalAirport]?.timezone;
-  const depKey = depTz ? civilKey(civilInZone(new Date(trip.departureDatetime), depTz)) : null;
-  const arrKey = arrTz ? civilKey(civilInZone(new Date(trip.arrivalDatetime), arrTz)) : null;
+  // Instants resolved in the airports' own zones, not the viewer's machine.
+  const depTz = trip.flight?.departureTimezone || airports[trip.departureAirport]?.timezone;
+  const arrTz = trip.flight?.arrivalTimezone || airports[trip.arrivalAirport]?.timezone;
+  const depAt = trip.flight ? new Date(trip.flight.departureInstant) : null;
+  const arrAt = trip.flight ? new Date(trip.flight.arrivalInstant) : null;
+  const depKey = depAt && depTz ? civilKey(civilInZone(depAt, depTz)) : null;
+  const arrKey = arrAt && arrTz ? civilKey(civilInZone(arrAt, arrTz)) : null;
 
   let i = 0;
   for (const [key, { bands, dayOffset }] of byDate) {
@@ -417,15 +441,16 @@ function renderTimeline(entries, trip) {
       track.appendChild(mark);
     }
 
-    for (const [k, tz, instant, name] of [
-      [depKey, depTz, trip.departureDatetime, 'Takeoff'],
-      [arrKey, arrTz, trip.arrivalDatetime, 'Landing'],
+    for (const [k, tz, at, name] of [
+      [depKey, depTz, depAt, 'Takeoff'],
+      [arrKey, arrTz, arrAt, 'Landing'],
     ]) {
-      if (k !== key || !tz) continue;
+      if (k !== key || !tz || !at) continue;
+      const hour = localDecimalHour(at, tz);
       const mark = document.createElement('div');
       mark.className = 'tl-mark';
-      mark.style.left = `${(localDecimalHour(new Date(instant), tz) / 24) * 100}%`;
-      mark.title = `${name} ${formatHour(localDecimalHour(new Date(instant), tz))}`;
+      mark.style.left = `${(hour / 24) * 100}%`;
+      mark.title = `${name} ${formatHour(hour)}`;
       track.appendChild(mark);
     }
 
